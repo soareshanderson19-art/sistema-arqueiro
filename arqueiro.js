@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getDatabase, ref, set, onValue, get, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 // Credenciais do novo projeto do Firebase Arqueiro
 const firebaseConfig = {
@@ -23,7 +23,7 @@ let pairedId = null;
 let panicTimer = null;
 let audioContext = null;
 
-// Osciladores extras para som mais encorpado e estrondoso
+// Osciladores de som de alta potência
 let sirenOsc1 = null;
 let sirenOsc2 = null;
 let sirenOsc3 = null;
@@ -34,6 +34,10 @@ let fakeCallOscL = null;
 let fakeCallOscR = null;
 let fakeCallInterval = null;
 let lastGpsCoords = ""; 
+
+// Instâncias do Mapa Interativo Leaflet
+let mapInstance = null;
+let markerInstance = null;
 
 // Inicialização da interface e solicitações de permissão
 if (localStorage.getItem("arqueiro_role")) {
@@ -110,7 +114,6 @@ function tocarToqueDeLigacao() {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
 
-  // Toque clássico americano de telefone (frequências de 440Hz + 480Hz)
   fakeCallInterval = setInterval(() => {
     if (audioContext.state === 'suspended') {
       audioContext.resume();
@@ -135,7 +138,6 @@ function tocarToqueDeLigacao() {
     fakeCallOscL.start();
     fakeCallOscR.start();
 
-    // Pulsação padrão de ringtone (toca por 1.5s, para por 2s)
     setTimeout(() => {
       try {
         fakeCallOscL.stop();
@@ -212,11 +214,19 @@ async function dispararAlertaPanico() {
     if (snap.exists()) suspectData = snap.val();
   }
 
-  await set(ref(db, `arqueiro/alertas/${userId}`), {
+  // Correção crucial: Usando update() para preservar a localização GPS sem deletá-la
+  const updates = {
     status: "perigo",
-    timestamp: new Date().toISOString(),
-    suspeito: suspectData
-  });
+    timestamp: new Date().toISOString()
+  };
+  
+  if (suspectData) {
+    updates.suspeito = suspectData;
+  } else {
+    updates.suspeito = null;
+  }
+
+  await update(ref(db, `arqueiro/alertas/${userId}`), updates);
 
   panicStatusText.innerHTML = "🚨 <b>ALERTA DE PÂNICO DISPARADO!</b>";
   window.atualizarGPS(); 
@@ -237,9 +247,10 @@ window.atualizarGPS = function() {
     
     gpsStatus.innerHTML = `📍 GPS Enviado: <b>${lat.toFixed(5)}, ${lng.toFixed(5)}</b>`;
 
-    await set(ref(db, `arqueiro/alertas/${userId}/gps`), {
-      lat: lat,
-      lng: lng
+    // Atualiza apenas a ramificação de GPS de forma segura no Firebase
+    await update(ref(db, `arqueiro/alertas/${userId}`), {
+      "gps/lat": lat,
+      "gps/lng": lng
     });
   }, (error) => {
     gpsStatus.innerText = "Erro ao carregar GPS. Verifique se as permissões de localização estão ativas.";
@@ -371,6 +382,34 @@ function iniciarMonitoramento(idProtegida) {
   document.getElementById("g_vincular_card").style.display = "none";
   document.getElementById("g_monitoramento_area").style.display = "block";
 
+  // Sincroniza e exibe permanentemente todos os suspeitos que a Protegida cadastrou
+  onValue(ref(db, `arqueiro/suspeitos/${idProtegida}`), (snapshot) => {
+    const listDiv = document.getElementById("g_all_suspects_list");
+    const card = document.getElementById("g_all_suspects_card");
+    listDiv.innerHTML = '';
+
+    if (snapshot.exists()) {
+      card.style.display = "block";
+      const dados = snapshot.val();
+      Object.values(dados).forEach(sus => {
+        const item = document.createElement("div");
+        item.className = "suspect-item";
+        item.innerHTML = `
+          <img src="${sus.foto || 'https://placehold.co/100x100?text=Sem+Foto'}" class="suspect-photo" onerror="this.src='https://placehold.co/100x100?text=Sem+Foto'">
+          <div class="suspect-info">
+            <div class="suspect-name">${sus.nome}</div>
+            <div class="suspect-metadata"><strong>Físico:</strong> ${sus.caract || '--'}</div>
+            <div class="suspect-metadata"><strong>Veículo:</strong> ${sus.veiculo || '--'}</div>
+          </div>
+        `;
+        listDiv.appendChild(item);
+      });
+    } else {
+      card.style.display = "none";
+    }
+  });
+
+  // Ouvinte em tempo real de alertas de Pânico
   onValue(ref(db, `arqueiro/alertas/${idProtegida}`), (snapshot) => {
     const card = document.getElementById("g_status_card");
     const icon = document.getElementById("g_status_icon");
@@ -392,34 +431,63 @@ function iniciarMonitoramento(idProtegida) {
         
         tocarSirenePolicial();
 
-        // Envia notificação nativa para o celular do Guardião (mesmo em segundo plano)
+        // Dispara notificação nativa persistente do sistema de segundo plano
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("🚨 EMERGÊNCIA — SISTEMA ARQUEIRO", {
-            body: "Sua protegida acionou o pânico! Clique para abrir o mapa de socorro.",
+            body: "Sua protegida acionou o pânico! Verifique o mapa imediatamente.",
             tag: "arqueiro-panic",
             requireInteraction: true 
           });
         }
 
+        // Renderiza as coordenadas GPS e o Endereço aprox.
         if (alerta.gps) {
+          const lat = alerta.gps.lat;
+          const lng = alerta.gps.lng;
+
           const linkMaps = document.getElementById("g_link_maps");
-          linkMaps.href = `https://www.google.com/maps/dir/?api=1&destination=${alerta.gps.lat},${alerta.gps.lng}`;
+          linkMaps.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
           linkMaps.style.display = "flex";
 
-          const coordsKey = `${alerta.gps.lat},${alerta.gps.lng}`;
+          // Mapa Interativo integrado na tela do Guardião (Leaflet)
+          const mapEl = document.getElementById("g_map");
+          mapEl.style.display = "block";
+
+          if (!mapInstance) {
+            mapInstance = L.map('g_map').setView([lat, lng], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '© OpenStreetMap'
+            }).addTo(mapInstance);
+            markerInstance = L.marker([lat, lng]).addTo(mapInstance)
+              .bindPopup("Protegida está aqui!").openPopup();
+          } else {
+            const newLatLng = new L.LatLng(lat, lng);
+            markerInstance.setLatLng(newLatLng);
+            mapInstance.setView(newLatLng, 16);
+          }
+
+          // Corrige renderização do tamanho do mapa
+          setTimeout(() => {
+            if (mapInstance) mapInstance.invalidateSize();
+          }, 100);
+
+          // Geocodificação reversa de endereço (Nome da rua)
+          const coordsKey = `${lat},${lng}`;
           if (lastGpsCoords !== coordsKey) {
             lastGpsCoords = coordsKey;
             addressEl.style.display = "block";
             addressEl.innerText = "📍 Buscando endereço aproximado...";
             
-            obterEnderecoAproximado(alerta.gps.lat, alerta.gps.lng).then(addr => {
+            obterEnderecoAproximado(lat, lng).then(addr => {
               addressEl.innerHTML = `📍 <b>Endereço aproximado:</b><br/>${addr}`;
             });
           }
         } else {
           addressEl.style.display = "none";
+          document.getElementById("g_map").style.display = "none";
         }
 
+        // Ficha do Suspeito Selecionado no Alerta
         if (alerta.suspeito) {
           suspectCard.style.display = "block";
           document.getElementById("g_suspect_photo").src = alerta.suspeito.foto || '';
@@ -448,18 +516,22 @@ function normalizarPainelGuardiao() {
   document.getElementById("g_alarm_buttons").style.display = "none";
   document.getElementById("g_suspect_card").style.display = "none";
   document.getElementById("g_status_address").style.display = "none";
+  document.getElementById("g_map").style.display = "none";
   lastGpsCoords = "";
 }
 
 window.desligarSonsSinal = async function() {
   pararSireneSom();
   if (pairedId) {
-    await set(ref(db, `arqueiro/alertas/${pairedId}/status`), "seguro");
+    // Altera o status para seguro sem deletar as outras informações
+    await update(ref(db, `arqueiro/alertas/${pairedId}`), {
+      status: "seguro"
+    });
   }
 };
 
 // =========================================================================
-// NOVO SINTETIZADOR DE SIRENE POLICIAL METÁLICA E ESTRONDOSA (Web Audio Synth)
+// SINTETIZADOR DE SIRENE POLICIAL METÁLICA E ESTRONDOSA (Web Audio Synth)
 // =========================================================================
 function tocarSirenePolicial() {
   if (sirenInterval) return;
