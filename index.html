@@ -4,9 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Sistema Arqueiro</title>
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+  
+  <!-- CSS do Mapa Interativo Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <!-- Estilos Gerais do App -->
   <link rel="stylesheet" href="arqueiro.css">
 </head>
 <body class="theme-selection">
@@ -178,7 +184,7 @@
         <button class="disguise-btn" onclick="logout()">Deslogar</button>
       </div>
 
-      <div class="screen active" style="padding: 18px 24px;">
+      <div class="screen active" style="padding: 18px 24px; overflow-y: auto;">
         <!-- Card de Vinculação -->
         <div class="card" id="g_vincular_card">
           <div class="card-title">🔗 Conectar à Protegida</div>
@@ -195,17 +201,20 @@
             <div id="g_status_icon" class="status-huge-icon">🛡️</div>
             <h3 id="g_status_title" class="status-title-text">TUDO SEGURO</h3>
             <p id="g_status_desc" class="status-desc-text">Nenhum alerta ativo no momento.</p>
-            <p id="g_status_address" style="font-size: 0.85rem; color: #ff3366; font-weight: 800; margin-top: 12px; display: none; line-height: 1.4; padding: 10px; border-radius: 8px; background: rgba(255, 51, 102, 0.1); border: 1.5px dashed rgba(255, 51, 102, 0.3);"></p>
+            <p id="g_status_address" style="font-size: 0.85rem; color: #ff3366; font-weight: 800; margin-top: 12px; display: none; line-height: 1.4; padding: 10px; border-radius: 8px; background: rgba(255, 51, 102, 0.1); border: 1.5px dashed rgba(255, 51, 102, 0.3); text-align: left;"></p>
+            
+            <!-- Contêiner do Mapa Interativo Leaflet -->
+            <div id="g_map" style="height: 220px; width: 100%; border-radius: 12px; margin-top: 12px; display: none; z-index: 1;"></div>
             
             <div id="g_alarm_buttons" style="margin-top: 14px; display: none; width: 100%;">
-              <button class="btn btn-danger btn-full" onclick="desligarSonsSinal()" style="background: #000; color: #fff; margin-bottom: 8px; font-weight: 800;">Parar Sirene</button>
-              <a id="g_link_maps" target="_blank" class="btn btn-full maps-btn" style="font-weight: 800;">📍 Ver Rota no Google Maps</a>
+              <button class="btn btn-danger btn-full" onclick="desligarSonsSinal()" style="background: #000; color: #fff; margin-bottom: 8px; font-weight: 800;">Parar Alerta</button>
+              <a id="g_link_maps" target="_blank" class="btn btn-full maps-btn" style="font-weight: 800; display: none; margin-top: 8px;">📍 Abrir no Google Maps</a>
             </div>
           </div>
 
-          <!-- Dados do Agressor Ativo -->
+          <!-- Dados do Agressor Ativo no Alerta -->
           <div class="card" id="g_suspect_card" style="display: none;">
-            <div class="card-title">👤 Alerta de Suspeito Monitorado</div>
+            <div class="card-title">🚨 Alerta de Suspeito Próximo</div>
             <div class="suspect-item active-suspect">
               <img id="g_suspect_photo" src="" class="suspect-photo" onerror="this.src='https://placehold.co/100x100?text=Sem+Foto'">
               <div class="suspect-info">
@@ -216,12 +225,24 @@
             </div>
           </div>
 
+          <!-- NOVO: Mural de todos os suspeitos que a Protegida cadastrou -->
+          <div class="card" id="g_all_suspects_card" style="display: none; margin-top: 16px;">
+            <div class="card-title">👥 Suspeitos Cadastrados pela Protegida</div>
+            <div id="g_all_suspects_list">
+              <!-- Renderizado dinamicamente -->
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
 
   </div>
 
+  <!-- Biblioteca do Mapa Interativo Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Carrega a lógica JavaScript modular externa -->
   <script type="module" src="arqueiro.js"></script>
 </body>
 </html>
