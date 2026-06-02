@@ -12,7 +12,6 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      # Passo ajustado para não exigir o arquivo package-lock.json
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -34,6 +33,18 @@ jobs:
         run: |
           npx cap init "Sistema Arqueiro" "com.sistema.arqueiro" --web-dir=www
           npx cap add android
+
+      # PASSO ADICIONADO: Injeta permissões de GPS, Microfone e Notificações no manifesto Android
+      - name: Inject Android Hardware Permissions
+        run: |
+          node -e "
+          const fs = require('fs');
+          const file = 'android/app/src/main/AndroidManifest.xml';
+          let content = fs.readFileSync(file, 'utf8');
+          const permissions = '\n    <uses-permission android:name=\"android.permission.ACCESS_COARSE_LOCATION\" />\n    <uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\" />\n    <uses-permission android:name=\"android.permission.RECORD_AUDIO\" />\n    <uses-permission android:name=\"android.permission.MODIFY_AUDIO_SETTINGS\" />\n    <uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />\n';
+          content = content.replace('</manifest>', permissions + '</manifest>');
+          fs.writeFileSync(file, content, 'utf8');
+          "
 
       - name: Generate App Icon
         run: npx @capacitor/assets generate --iconBackgroundColor '#121214' --iconBackgroundColorDark '#09090d'
