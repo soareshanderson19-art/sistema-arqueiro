@@ -1,1 +1,22 @@
+name: Deploy to GitHub Pages
 
+on:
+  push:
+    branches:
+      - main # Executa quando atualizado na branch principal (main ou master)
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: www # Publica apenas os arquivos de dentro da pasta www
+          branch: gh-pages
