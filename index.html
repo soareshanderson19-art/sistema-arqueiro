@@ -1,1 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sistema Arqueiro</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- CSS do Mapa Interativo Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <link rel="stylesheet" href="arqueiro.css">
+</head>
+<body class="theme-selection">
 
+  <div class="app-container">
+
+    <!-- Tela de Login / Cadastro -->
+    <div id="screenLogin" class="screen active">
+      <div class="login-header">
+        <h1>SISTEMA ARQUEIRO</h1>
+        <p>Segurança Colaborativa e Proteção Imediata</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="field-group">
+          <label>Seu Nome Completo</label>
+          <input type="text" id="login_name" placeholder="Seu nome completo">
+        </div>
+        <div class="field-group" style="margin-top: 10px;">
+          <label>Seu Número de Celular (com DDD)</label>
+          <input type="tel" id="login_phone" placeholder="Celular com DDD (somente números)">
+        </div>
+      </div>
+
+      <h4 class="login-subtitle">ENTRAR COMO:</h4>
+
+      <div class="role-card protegida-btn" onclick="selectRole('protegida')">
+        <div class="role-icon">🛡️</div>
+        <div class="role-info">
+          <h3>Sou Protegida</h3>
+          <p>Painel de pânico silencioso, monitoramento de agressores e envio de GPS.</p>
+        </div>
+      </div>
+
+      <div class="role-card guardiao-btn" onclick="selectRole('guardiao')">
+        <div class="role-icon">🏹</div>
+        <div class="role-info">
+          <h3>Sou Guardião</h3>
+          <p>Receba alertas em tempo real, rotas de GPS e dados do agressor.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tela de Alerta Ativo / Estou Bem (Apenas para Protegida) -->
+    <div id="p_panic_warning_overlay" class="panic-overlay">
+      <div class="panic-overlay-content">
+        <div class="panic-overlay-icon">🚨</div>
+        <h2 style="font-weight: 900; letter-spacing: -0.5px; margin-bottom: 10px;">ALERTA ENVIADO!</h2>
+        <p style="font-size: 0.95rem; line-height: 1.5; opacity: 0.9;">O seu Guardião foi notificado de emergência e está recebendo sua localização e áudio em tempo real.</p>
+        <button class="btn btn-ok" onclick="enviarEstouBem()">🟢 ESTOU BEM / CANCELAR ALERTA</button>
+      </div>
+    </div>
+
+    <!-- Fluxo Protegida -->
+    <div id="screenProtegida" class="role-wrapper">
+      
+      <div class="app-header">
+        <div>
+          <h2 class="app-brand">Arqueiro</h2>
+          <small class="app-subtitle">Painel de Proteção</small>
+        </div>
+        <button class="disguise-btn" onclick="logout()">Sair</button>
+      </div>
+
+      <!-- Aba 1: Pânico, Caminho Monitorado e Seleção de Suspeito -->
+      <div id="p_tab_panico" class="p-tab-content screen active">
+        
+        <!-- Caminho Monitorado Otimizado e Compacto -->
+        <div class="card" id="timer_config" style="padding: 12px; margin-bottom: 10px; width: 100%; box-sizing: border-box;">
+          <div class="card-title" style="margin-bottom: 8px; font-size: 0.9rem;">🕒 Caminho Monitorado (Virtual Escort)</div>
+          <div style="display: flex; gap: 6px; width: 100%; align-items: center;">
+            <input type="number" id="timer_min" placeholder="Min" style="width: 58px; flex-shrink: 0; padding: 10px; border: 1.5px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; outline: none; text-align: center;">
+            <input type="password" id="timer_pin" placeholder="PIN" style="flex: 1; min-width: 0; padding: 10px; border: 1.5px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; outline: none;">
+            <button class="btn" onclick="iniciarCaminhoMonitorado()" style="padding: 10px 14px; font-size: 0.85rem; font-weight: 700; flex-shrink: 0; border-radius: 8px;">Ativar</button>
+          </div>
+        </div>
+
+        <div class="card centered" id="timer_active" style="display: none; background: #fffbeb; border: 1.5px solid #fcd34d; padding: 12px; margin-bottom: 10px;">
+          <div class="card-title centered" style="color: #d97706; margin-bottom: 4px; font-size: 0.9rem;">🕒 Cronômetro Ativo</div>
+          <div id="timer_countdown" style="font-size: 1.8rem; font-weight: 900; color: #d97706; margin: 4px 0;">00:00</div>
+          <button class="btn btn-danger btn-full" onclick="desativarCaminhoMonitorado()" style="padding: 6px 12px; font-size: 0.85rem;">Desativar</button>
+        </div>
+
+        <!-- Seleção Ativa do Suspeito -->
+        <div class="card" style="padding: 12px; margin-bottom: 10px;">
+          <div class="card-title" style="margin-bottom: 6px; font-size: 0.9rem;">👤 Quem está te seguindo/ameaçando?</div>
+          <div class="field-group">
+            <select id="p_select_suspeito" style="padding: 6px; font-size: 0.85rem;">
+              <option value="nenhum">Nenhum suspeito selecionado</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Botão Pânico -->
+        <div class="panic-wrapper" style="margin: 10px 0;">
+          <div class="panic-btn-outer" id="panicBtn" onclick="registrarToquePanico(event)" ontouchstart="registrarToquePanico(event)">
+            <div class="panic-progress" id="panicProgress"></div>
+            <div class="panic-btn-inner">
+              <span>PÂNICO</span>
+              <small class="panic-btn-subtext">TOQUE 5 VEZES</small>
+            </div>
+          </div>
+          <p id="panicStatusText" class="status-helper-text" style="margin-top: 8px;">Toque rápido 5 vezes seguidas para disparar</p>
+        </div>
+
+        <!-- Botão de Ligação Rápida 190 -->
+        <div style="margin-bottom: 15px;">
+          <a href="tel:190" class="action-btn btn-police" style="width: 100%; text-decoration: none; display: flex; justify-content: center; align-items: center; font-size: 1rem; height: 44px; border-radius: 10px; box-shadow: 0 4px 12px rgba(230, 92, 0, 0.3);">
+            <span>📞</span> Ligar para a Polícia (190)
+          </a>
+        </div>
+
+        <!-- Localização GPS -->
+        <div class="card centered" style="padding: 12px; margin-bottom: 10px;">
+          <div class="card-title centered" style="margin-bottom: 6px; font-size: 0.9rem;">📍 Localização GPS</div>
+          <p id="p_gps_status" class="gps-status-text" style="margin-bottom: 8px; font-size: 0.75rem;">Buscando localização...</p>
+          <button id="p_gps_btn" class="btn btn-full" onclick="atualizarGPS()" style="padding: 8px; font-size: 0.85rem;">🔄 Atualizar Localização</button>
+        </div>
+      </div>
+
+      <!-- Aba 2: Cadastro Suspeitos (Apenas cadastro e visualização) -->
+      <div id="p_tab_suspeitos" class="p-tab-content screen" style="overflow-y: auto;">
+        <div class="card">
+          <div class="card-title" id="sus_form_title">➕ Cadastrar Novo Suspeito</div>
+          <div class="field-group">
+            <label>Nome / Apelido</label>
+            <input type="text" id="sus_nome" placeholder="Nome ou Apelido do suspeito">
+          </div>
+          <div class="field-group">
+            <label>Foto do Suspeito (Carregar Imagem)</label>
+            <input type="file" id="sus_foto" accept="image/*" style="padding: 5px;">
+          </div>
+          <div class="field-group">
+            <label>Características Físicas</label>
+            <input type="text" id="sus_caract" placeholder="Características físicas (ex: altura, cabelo, tatuagens)">
+          </div>
+          <div class="field-group" style="margin-bottom: 14px;">
+            <label>Veículos Associados (Placa/Modelo)</label>
+            <input type="text" id="sus_veiculo" placeholder="Placa, cor, modelo do veículo">
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button id="btn_salvar_suspeito" class="btn btn-full" onclick="cadastrarSuspeito()">Salvar no Acervo</button>
+            <button id="btn_cancelar_edicao" class="btn btn-secondary" onclick="cancelarEdicaoSuspeito()" style="display: none; background: #4a5568; color: #fff;">Cancelar</button>
+          </div>
+        </div>
+
+        <h4 class="list-heading">Suspeitos Cadastrados</h4>
+        <div id="p_lista_suspeitos"></div>
+      </div>
+
+      <!-- Aba 3: Painel de Defesa Sonora -->
+      <div id="p_tab_defesa" class="p-tab-content screen">
+        <div class="card centered" style="margin-top: 20px; padding: 24px;">
+          <div class="card-title centered" style="font-size: 1.15rem; margin-bottom: 16px;">🔊 Defesa Acústica de Alto Impacto</div>
+          <p class="helper-text-p" style="margin-bottom: 24px; font-size: 0.85rem; line-height: 1.5; color: var(--text-muted);">
+            Dispare alertas de alta intensidade sonora no seu próprio telefone para assustar agressores e chamar a atenção das pessoas ao seu redor.
+          </p>
+          
+          <button id="btn_alarme_local" class="btn btn-full" onclick="alternarAlarmeLocal()" style="height: 52px; font-size: 1.05rem; margin-bottom: 12px; font-weight: 800;">🔊 Alarme de Pânico</button>
+          <button id="btn_apito" class="btn btn-full" onclick="alternarApitoSocorro()" style="height: 52px; font-size: 1.05rem; background: #4a5568; font-weight: 800;">😗 Apito de Socorro</button>
+        </div>
+      </div>
+
+      <!-- Aba 4: Mapeamento e Apoio Inteligente (GPS Dinâmico) -->
+      <div id="p_tab_apoio" class="p-tab-content screen" style="overflow-y: auto;">
+        <div class="card">
+          <div class="card-title">🚨 Telefones Úteis de Emergência</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <a href="tel:180" class="action-btn" style="background: #2563eb; color: #fff; text-decoration: none;">📞 Ligue 180 (Central da Mulher)</a>
+            <a href="tel:190" class="action-btn btn-police" style="background: #e65c00;">📞 Ligue 190 (Polícia Militar)</a>
+            <a href="tel:193" class="action-btn" style="background: #b91c1c; color: #fff; text-decoration: none;">📞 Ligue 193 (Corpo de Bombeiros)</a>
+          </div>
+        </div>
+
+        <!-- Seção de Postos de Apoio Próximos Organizados via GPS -->
+        <div class="card">
+          <div class="card-title">📍 Postos de Apoio Mais Próximos de Você</div>
+          <p id="p_apoio_gps_status" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; font-style: italic; line-height: 1.4;">
+            Aguardando sinal do GPS para ordenar os postos de apoio por distância...
+          </p>
+          <div id="p_lista_apoio_dinamica" style="display: flex; flex-direction: column; gap: 14px;">
+            <!-- Preenchido e ordenado dinamicamente via JS -->
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🛡️ Acolhimento Institucional Especializado</div>
+          <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-muted);">
+            <p style="margin-bottom: 6px;"><b>Casa de Apoio Viva Maria:</b><br/>Serviço municipal de acolhimento e moradia protegida.</p>
+            <p style="font-size: 0.76rem; color: #ef4444; font-weight: bold; margin-bottom: 6px;">⚠️ Endereço mantido sob sigilo de segurança para proteção das assistidas [1.1.1, 1.1.2]. O acolhimento e encaminhamento seguro são realizados de forma reservada pela DEAM ou pelo Ligue 180.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aba 5: Sincronização do Guardião -->
+      <div id="p_tab_guardiao" class="p-tab-content screen">
+        <div class="card centered">
+          <div class="card-title centered">🔗 Código de Conexão</div>
+          <p class="helper-text-p">
+            Passe o seu número de celular cadastrado abaixo para o seu Guardião para que ele possa monitorar o seu painel de pânico:
+          </p>
+          <div class="pair-badge" id="p_codigo_id">CARREGANDO...</div>
+        </div>
+      </div>
+
+      <!-- Navbar Protegida -->
+      <nav class="nav-bar">
+        <button class="nav-item active" onclick="switchTab('panico')">
+          <span class="nav-item-icon">⚠️</span>
+          <span>Pânico</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('suspeitos')">
+          <span class="nav-item-icon">👥</span>
+          <span>Suspeitos</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('defesa')">
+          <span class="nav-item-icon">🔊</span>
+          <span>Defesa</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('apoio')">
+          <span class="nav-item-icon">📍</span>
+          <span>Apoio</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('guardiao')">
+          <span class="nav-item-icon">🔗</span>
+          <span>Guardião</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Fluxo Guardião -->
+    <div id="screenGuardiao" class="role-wrapper">
+      
+      <div class="app-header">
+        <div>
+          <h2 class="app-brand-g">Arqueiro</h2>
+          <small class="app-subtitle">Painel do Guardião</small>
+        </div>
+        <button class="disguise-btn" onclick="logout()">Deslogar</button>
+      </div>
+
+      <div class="screen active" style="padding: 18px 24px; overflow-y: auto;">
+        <!-- Card de Vinculação -->
+        <div class="card" id="g_vincular_card">
+          <div class="card-title">🔗 Conectar à Protegida</div>
+          <div class="field-group-row">
+            <input type="tel" id="g_input_id" placeholder="Celular da Protegida com DDD">
+            <button class="btn" onclick="conectarProtegida()">Vincular</button>
+          </div>
+        </div>
+
+        <!-- Tela de Monitoramento / Alerta -->
+        <div id="g_monitoramento_area" style="display: none;">
+          
+          <div class="card centered" id="g_status_card">
+            <div id="g_status_icon" class="status-huge-icon">🛡️</div>
+            <h3 id="g_status_title" class="status-title-text">TUDO SEGURO</h3>
+            <p id="g_status_desc" class="status-desc-text">Nenhum alerta ativo no momento.</p>
+            <p id="g_status_address" style="font-size: 0.85rem; color: #ff3366; font-weight: 800; margin-top: 12px; display: none; line-height: 1.4; padding: 10px; border-radius: 8px; background: rgba(255, 51, 102, 0.1); border: 1.5px dashed rgba(255, 51, 102, 0.3); text-align: left;"></p>
+            
+            <!-- Gravação de Áudio Silencioso -->
+            <div id="g_audio_container" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.2);">
+              <p style="font-size: 0.8rem; font-weight: bold; color: var(--primary); margin-bottom: 6px;">🎙️ Áudio de Prova Gravado (Nuvem)</p>
+              <audio id="g_audio_player" controls style="width: 100%;"></audio>
+            </div>
+
+            <!-- Mapa Interativo do Leaflet -->
+            <div id="g_map" style="height: 220px; width: 100%; border-radius: 12px; margin-top: 12px; display: none; z-index: 100;"></div>
+            
+            <div id="g_alarm_buttons" style="margin-top: 14px; display: none; width: 100%;">
+              <button class="btn btn-danger btn-full" onclick="desligarSonsSinal()" style="background: #000; color: #fff; margin-bottom: 8px; font-weight: 800;">Parar Alerta</button>
+              <a id="g_link_maps" target="_blank" class="btn btn-full maps-btn" style="font-weight: 800; margin-top: 8px;">📍 Abrir Rota no Google Maps</a>
+            </div>
+          </div>
+
+          <!-- Dados do Agressor Ativo -->
+          <div class="card" id="g_suspect_card" style="display: none;">
+            <div class="card-title">🚨 Suspeito Ativo Próximo</div>
+            <div class="suspect-item active-suspect">
+              <img id="g_suspect_photo" src="" class="suspect-photo" onerror="this.src='https://placehold.co/100x100?text=Sem+Foto'">
+              <div class="suspect-info">
+                <div class="suspect-name" id="g_suspect_name">--</div>
+                <div class="suspect-metadata"><strong>Características:</strong> <span id="g_suspect_caract">--</span></div>
+                <div class="suspect-metadata"><strong>Veículo:</strong> <span id="g_suspect_veiculo">--</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lista Permanente de Suspeitos -->
+          <div class="card" id="g_all_suspects_card" style="display: none; margin-top: 16px;">
+            <div class="card-title">👥 Suspeitos Cadastrados pela Protegida</div>
+            <div id="g_all_suspects_list"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Script do Mapa Interativo Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <script type="module" src="arqueiro.js"></script>
+</body>
+</html>
