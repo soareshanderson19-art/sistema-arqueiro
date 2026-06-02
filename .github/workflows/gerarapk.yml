@@ -1,1 +1,54 @@
+name: Build Android APK
 
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Initialize Capacitor Android
+        run: |
+          npx cap init "Sistema Arqueiro" "com.sistema.arqueiro" --web-dir=www
+          npx cap add android
+
+      # Passo adicionado para gerar e aplicar o ícone no Android
+      - name: Generate App Icon
+        run: npx @capacitor/assets generate --iconBackgroundColor '#121214' --iconBackgroundColorDark '#09090d'
+
+      - name: Sync Web Code to Android
+        run: npx cap sync android
+
+      - name: Build Android Debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arqueiro-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
