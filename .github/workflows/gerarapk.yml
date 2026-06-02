@@ -12,11 +12,11 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      # Passo ajustado para não exigir o arquivo package-lock.json
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install Dependencies
         run: npm install
@@ -35,7 +35,6 @@ jobs:
           npx cap init "Sistema Arqueiro" "com.sistema.arqueiro" --web-dir=www
           npx cap add android
 
-      # Passo adicionado para gerar e aplicar o ícone no Android
       - name: Generate App Icon
         run: npx @capacitor/assets generate --iconBackgroundColor '#121214' --iconBackgroundColorDark '#09090d'
 
