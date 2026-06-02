@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, set, onValue, get, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// Credenciais do seu projeto do Firebase Arqueiro
+// Credenciais do novo projeto do Firebase Arqueiro
 const firebaseConfig = {
   apiKey: "AIzaSyDKsvwc3N5mkHHJediS-RMrfPETLrmw7Xw",
   authDomain: "arqueiro-9791a.firebaseapp.com",
@@ -17,23 +17,8 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 // =========================================================================
-// FUNÇÕES UTILITÁRIAS DE GEOLOCALIZAÇÃO (Fórmula de Haversine)
+// FUNÇÃO UTILITÁRIA GLOBAL (Conversor de arquivos para texto Base64)
 // =========================================================================
-
-// Calcula a distância exata entre duas coordenadas em km [1.1.3]
-const calcularDistancia = (lat1, lon1, lat2, lon2) => {
-  const R = 6371; // Raio da Terra em km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c; 
-};
-
-// Converte arquivo para texto Base64
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -43,7 +28,9 @@ const fileToBase64 = (file) => {
   });
 };
 
-// Compressor de Imagem
+// =========================================================================
+// COMPRESSOR DE IMAGEM CLIENT-SIDE (Evita estourar o limite de 10MB do Firebase)
+// =========================================================================
 const comprimirImagem = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -82,36 +69,6 @@ const comprimirImagem = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) =
     reader.onerror = (err) => reject(err);
   });
 };
-
-// =========================================================================
-// BANCO DE DADOS DE SEGURANÇA (Usado apenas se a Protegida estiver sem internet)
-// =========================================================================
-const pontosApoioPadrao = [
-  {
-    nome: "Delegacia da Mulher (DEAM - Alvorada)",
-    endereco: "Rua Alberto Pasqualini, 404 - Sumaré, Alvorada/RS",
-    telefone: "(51) 3442-1114",
-    lat: -29.9892,
-    lng: -51.0827,
-    tipo: "delegacia"
-  },
-  {
-    nome: "SIM - Serviços Integrados para Mulheres (Alvorada)",
-    endereco: "Av. Presidente Getúlio Vargas, 3060 (Parada 48) - Americana, Alvorada/RS",
-    telefone: "(51) 3411-1345",
-    lat: -30.0045,
-    lng: -51.0872,
-    tipo: "defensoria"
-  },
-  {
-    nome: "Delegacia da Mulher (DEAM - Porto Alegre)",
-    endereco: "Rua Prof. Cristiano Fischer, 1610 - Jardim do Salso, Porto Alegre/RS",
-    telefone: "(51) 3288-2173",
-    lat: -30.0520,
-    lng: -51.1685,
-    tipo: "delegacia"
-  }
-];
 
 // Estados e variáveis auxiliares
 let currentRole = null;
@@ -152,10 +109,6 @@ let panicTapsCount = 0;
 let panicResetTimeout = null;
 let lastTapTime = 0; 
 
-// Variáveis de Controle de Busca Geográfica do Usuário
-let lastSearchedCity = "";
-let lastSearchedCoords = null;
-
 // Variáveis de Controle e Segurança
 let isAlertActive = false; 
 let editingSuspectId = null; 
@@ -188,6 +141,7 @@ function setupInterface() {
     document.getElementById("screenProtegida").style.display = "flex";
     document.getElementById("p_codigo_id").innerText = formatPhoneString(userId);
     syncProtegidaData();
+    solicitarPermissoesIniciais(); // Pede GPS e Microfone logo na entrada
     iniciarRastreamentoGPSContinuo(); 
   } else if (currentRole === 'guardiao') {
     document.body.classList.add("theme-guardiao");
@@ -197,6 +151,20 @@ function setupInterface() {
       pairedId = savedPair;
       iniciarMonitoramento(savedPair);
     }
+  }
+}
+
+// Solicita as permissões do smartphone preventivamente para evitar travamentos/fechamentos
+function solicitarPermissoesIniciais() {
+  // Dispara o pop-up de permissão de GPS do aparelho
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true });
+  }
+  // Dispara o pop-up de permissão de Microfone do aparelho
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => stream.getTracks().forEach(track => track.stop())) // Desliga após autorizar
+      .catch(err => console.warn("Permissão de gravação negada no início.", err));
   }
 }
 
